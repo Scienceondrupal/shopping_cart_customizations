@@ -1,0 +1,70 @@
+<?php
+
+function custom_cart_batch_alter(&$batch)
+{
+     $batch["redirect"]="cart";
+}
+
+function custom_cart_form_alter(&$form, $form_state, $form_id) {
+
+    
+    drupal_add_library('system', 'ui.core');
+    drupal_add_library('system', 'ui.accordion');
+    drupal_add_library('system', 'ui.widget');
+    drupal_add_library('system', 'ui.dialog');
+    drupal_add_library('system', 'ui.slider');
+    drupal_add_library('system', 'ui.tabs');
+    drupal_add_library('system', 'effects');
+    drupal_add_library('system', 'ui.datepicker');
+    drupal_add_js(drupal_get_path('module', 'custom_cart') . '/js/calendar.js');
+
+    if ($form_id == 'uc_cart_view_form') {
+        $form_state['rebuild'] = TRUE;
+    }
+}
+ 
+function total_size_of_dataset($short_name, $start_date, $end_date) {
+
+    if (!isset($start_date)) {
+        $start_date = "*";
+    }
+    else {
+        $start_date = trim($start_date)."T00:00:00Z";
+    }
+
+    if (!isset($end_date)) {
+        $end_date = "*";
+    }
+    else {
+        $end_date = trim($end_date)."T00:00:00Z";
+    }
+
+    $base_uri = "http://192.168.1.101:8983/solr/collection1/select?"; // TODO: add an admin configurable option variable named solr_server to use for querying purposes
+    $url = $base_uri . "q=sm_field_dataset_short1_name:" . $short_name ."&wt=json&indent=true";
+    $url = $url . str_replace(' ', '%20', "&fq=dm_field_start_date:[".trim($start_date)." TO *]");
+    $url = $url . str_replace(' ', '%20', "&fq=dm_field_stop_date:[* TO ".trim($end_date)." ]");
+
+    $fields = array();
+    $solrResponseJSON = curl_request($url, $fields);
+
+    $total_size = 0;
+    foreach (json_decode($solrResponseJSON) as $item) {
+        foreach ($item->docs as $doc){
+            $total_size += $doc->fts_field_byte_size;
+        }
+    }
+    return $total_size;
+}
+
+function curl_request($url, $fields) {
+    $curl = curl_init($url);
+    curl_setopt($curl, CURLOPT_POST, 1);
+    curl_setopt($curl, CURLOPT_POSTFIELDS, $fields);
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($curl, CURLOPT_HTTPHEADER, array('Expect:'));
+
+    $response = curl_exec($curl);
+
+    curl_close($curl);
+    return $response;
+}
